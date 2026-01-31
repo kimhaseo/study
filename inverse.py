@@ -37,95 +37,101 @@ ee_id = model.getFrameId(EE_NAME)
 def ee_orientation_from_euler(roll, pitch, yaw, degrees=True):
     return R.from_euler('xyz', [roll, pitch, yaw], degrees=degrees).as_matrix()
 
+def random_target_position():
+    # 예시: x,y,z를 -0.3~0.3 범위에서 랜덤 선택
+    x = np.random.uniform(-0.3, 0.3)
+    y = np.random.uniform(0.05, 0.3)
+    z = np.random.uniform(-0.3, -0.1)
+    return np.array([x, y, z])
+
 # =============================
 # Initial Joint State
 # =============================
 q = pin.neutral(model)
 
 # =============================
-# ===== INPUT TARGET (DEG) =====
-# =============================
-p_des = np.array([-0.2, 0.1, -0.3])
-R_des = ee_orientation_from_euler(0, 180, 0)
-
-# =============================
-# IK Parameters
-# =============================
-damping = 1e-3
-dq_max = 0.05
-
-# =============================
-# IK Solve
-# =============================
-for i in range(300):
-    pin.forwardKinematics(model, data, q)
-    pin.updateFramePlacements(model, data)
-
-    oMf = data.oMf[ee_id]
-    p_cur = oMf.translation
-    R_cur = oMf.rotation
-
-    pos_err = p_des - p_cur
-    rot_err = pin.log3(R_des @ R_cur.T)
-    err = np.hstack([pos_err, rot_err])
-
-    if np.linalg.norm(err) < 1e-5:
-        break
-
-    J6 = pin.computeFrameJacobian(
-        model, data, q, ee_id,
-        pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
-    )
-    J = J6[:, 6:]
-
-    JT = J.T
-    dq = JT @ np.linalg.inv(J @ JT + damping * np.eye(6)) @ err
-    dq = np.clip(dq, -dq_max, dq_max)
-
-    q[7:] += dq
-    # q[7:] = 0.0  # 모든 관절을 0도로 초기화
-
-# =============================
-# OUTPUT IK RESULTS (DEGREE)
-# =============================
-print("\nSolved Joint Values (Degree):")
-joint_angles_deg = []
-for i, val in enumerate(q[7:]):
-    deg_val = np.degrees(val)
-    joint_angles_deg.append(deg_val)
-    print(f"Joint {i+1}: {deg_val:.3f} deg")
-
-# =============================
-# VISUALIZE
-# =============================
-viz.display(q)
-print("\nMeshcat viewer is open.")
-
-# =============================
-# MOTOR COMMAND 전송
+# MOTOR SETUP
 # =============================
 mc = MotorController()
-
-# 예시 모터 이름 (left_joint1~6)
 motor_names = [
     "left_joint1", "left_joint2", "left_joint3",
     "left_joint4", "left_joint5", "left_joint6"
 ]
-
-# AngleCommand 리스트 생성
-angle_commands = []
-for name, angle in zip(motor_names, joint_angles_deg):
-    # CAN ID 예시: 0x141~0x146 (환경에 맞게 수정)
-    cmd = AngleCommand(motor_name=name, angle=angle)
-    angle_commands.append(cmd)
-
-# 모터로 명령 전송
-mc.move_motors(angle_commands)
-print("\nMotor commands sent based on IK solution.")
+current_angles = np.array([0.0]*6)
 
 # =============================
-# Keep Meshcat Open
+# 보간 파라미터
 # =============================
-print("Close with Ctrl+C")
+duration = 2.0  # 목표까지 이동 시간 [s]
+dt = 0.05       # 모터 업데이트 간격 [s]
+steps = int(duration / dt)
+
+print("Starting random target movements. Close with Ctrl+C")
+
 while True:
-    time.sleep(1)
+    # =============================
+    # 랜덤 목표 생성
+    # =============================
+    p_des = random_target_position()
+    R_des = ee_orientation_from_euler(0, 180, 0)  # 자세는 고정
+
+    # =============================
+    # IK Solve
+    # =============================
+    q_ik = q.copy()
+    for i in range(300):
+        pin.forwardKinematics(model, data, q_ik)
+        pin.updateFramePlacements(model, data)
+
+        oMf = data.oMf[ee_id]
+        p_cur = oMf.translation
+        R_cur = oMf.rotation
+
+        pos_err = p_des - p_cur
+        rot_err = pin.log3(R_des @ R_cur.T)
+        err = np.hstack([pos_err, rot_err])
+
+        if np.linalg.norm(err) < 1e-5:
+            break
+
+        J6 = pin.computeFrameJacobian(
+            model, data, q_ik, ee_id,
+            pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
+        )
+        J = J6[:, 6:]
+
+        JT = J.T
+        dq = JT @ np.linalg.inv(J @ JT + 1e-3 * np.eye(6)) @ err
+        dq = np.clip(dq, -0.05, 0.05)
+
+        q_ik[7:] += dq
+
+    # IK 결과를 degree로 변환
+    target_angles = np.degrees(q_ik[7:])
+    print(f"\nNew Target Position: {p_des}, Target Angles: {target_angles}")
+
+    # =============================
+    # 보간 이동 (모터 + Meshcat)
+    # =============================
+    for t in range(1, steps + 1):
+        alpha = t / steps
+        angles_step = (1 - alpha) * current_angles + alpha * target_angles
+
+        # 모터 명령
+        angle_commands = []
+        for name, angle in zip(motor_names, angles_step):
+            cmd = AngleCommand(motor_name=name, angle=angle)
+            angle_commands.append(cmd)
+        mc.move_motors(angle_commands)
+
+        # Meshcat 시각화
+        q_display = q.copy()
+        q_display[7:] = np.radians(angles_step)
+        viz.display(q_display)
+
+        time.sleep(dt)
+
+    # =============================
+    # 최종 목표 각도로 맞춤
+    # =============================
+    current_angles = target_angles.copy()
