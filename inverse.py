@@ -83,6 +83,7 @@ for i in range(300):
     dq = np.clip(dq, -dq_max, dq_max)
 
     q[7:] += dq
+    # q[7:] = 0.0  # 모든 관절을 0도로 초기화
 
 # =============================
 # OUTPUT IK RESULTS (DEGREE)
