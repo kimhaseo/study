@@ -1,39 +1,26 @@
 import can
 
 class CanHandler:
-    def __init__(self, channel="virtual", interface="virtual", bitrate=1000000):
-        """
-        실제 하드웨어 없이 테스트용 virtual CAN 버스 생성
-        """
-        try:
-            self.bus = can.interface.Bus(channel=channel, interface=interface, bitrate=bitrate)
-            print(f"Dummy CAN bus initialized on {channel} ({interface})")
-        except Exception as e:
-            print(f"Error initializing dummy CAN bus: {e}")
-            self.bus = None
+    def __init__(self, channel="COM3", interface="slcan", bitrate=1000000):
+        self.bus = can.interface.Bus(channel=channel, interface=interface, bitrate=bitrate)
 
     def __call__(self, msg):
+        # 여기에서 수신된 메시지를 처리합니다.
         print(f"Received CAN message: {msg}")
+        # 필요에 따라 메시지를 파싱하거나 추가 작업을 수행할 수 있습니다.
 
     def send_message(self, can_id, data):
-        if self.bus is None:
-            print(f"Dummy send: ID={can_id}, data={data}")
-            return
-
         try:
             message = can.Message(arbitration_id=can_id, data=data, is_extended_id=False)
             self.bus.send(message)
-            # print(f"Sent CAN message: ID={can_id}, data={data}")
+            print(f"Sent CAN message: ID={can_id}, data={data}")
         except can.CanError as e:
             print(f"Error sending CAN message: {e}")
+            raise
 
     def receive_message(self, timeout=1.0):
-        if self.bus is None:
-            print("Dummy receive: No real messages")
-            return None
-
         try:
-            response = self.bus.recv(timeout)
+            response = self.bus.recv(timeout)  # 타임아웃 설정
             if response:
                 print(f"Received CAN message: {response}")
                 return response
@@ -44,12 +31,8 @@ class CanHandler:
             print(f"Error receiving CAN message: {e}")
 
     def close(self):
-        if self.bus is None:
-            print("Dummy CAN bus closed")
-            return
-
         try:
-            self.bus.shutdown()
+            self.bus.shutdown()  # 버스를 종료하고 리소스를 해제
             print("CAN bus shut down properly.")
         except Exception as e:
             print(f"Error during CAN bus shutdown: {e}")

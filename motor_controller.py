@@ -100,6 +100,10 @@ class MotorController:
         except Exception as e:
             print(f"Error sending PID gains: {e}")
 
+    def move_motors_to_angle(self, commands: list[AngleCommand]):
+        for cmd in commands:
+            self.move_motor_to_angle(cmd)
+
     def write_acceleration(self,accel_command):
         try:
 
@@ -162,9 +166,44 @@ class MotorController:
 
 
 if __name__ == "__main__":
-    mc = MotorController()
-    time.sleep(2)
-    test1 = AngleCommand("left_joint3", 0, 1000)
-    # test2 = AngleCommand("fl_joint3", -40, 100)
-    mc.move_motor_to_angle(test1)
-    # mc.move_motor_to_angle(test2)
+    if __name__ == "__main__":
+        mc = MotorController()
+
+        cmds = [
+            AngleCommand("left_joint1", 0, 360),
+            # AngleCommand("left_joint2", 60, 360),
+            # AngleCommand("left_joint3", 0, 360),
+            # AngleCommand("left_joint4", 0, 360),
+            # AngleCommand("left_joint5", 0, 360),
+            # AngleCommand("left_joint6", 60, 720),
+
+        ]
+
+        mc.move_motors_to_angle(cmds)
+
+        # time.sleep(3)
+        #
+        # cmds = [
+        #     AngleCommand("left_joint1", -20, 360),
+        #     AngleCommand("left_joint2", 150, 360),
+        #     AngleCommand("left_joint3", 45, 360),
+        #     AngleCommand("left_joint4", 45, 360),
+        #     AngleCommand("left_joint5", -45, 360),
+        #     AngleCommand("left_joint6", 30, 360),
+        # ]
+        #
+        # mc.move_motors_to_angle(cmds)
+        #
+        # time.sleep(3)
+        #
+        # cmds = [
+        #     AngleCommand("left_joint1", 0, 360),
+        #     AngleCommand("left_joint2", 60, 360),
+        #     AngleCommand("left_joint3", 0, 360),
+        #     AngleCommand("left_joint4", 0, 360),
+        #     AngleCommand("left_joint5", 0, 360),
+        #     AngleCommand("left_joint6", 0, 360),
+        #
+        # ]
+        #
+        # mc.move_motors_to_angle(cmds)

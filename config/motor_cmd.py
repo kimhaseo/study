@@ -6,15 +6,15 @@ class MotorCommand:
         "left_joint1": 0x141,
         "left_joint2": 0x142,
         "left_joint3": 0x143,
-        "left_joint1": 0x144,
-        "left_joint2": 0x145,
-        "left_joint3": 0x146,
+        "left_joint4": 0x144,
+        "left_joint5": 0x145,
+        "left_joint6": 0x146,
         "right_joint1": 0x147,
         "right_joint2": 0x148,
         "right_joint3": 0x149,
-        "right_joint1": 0x14A,
-        "right_joint2": 0x14B,
-        "right_joint3": 0x14C
+        "right_joint4": 0x14A,
+        "right_joint5": 0x14B,
+        "right_joint6": 0x14C
     }
 
     def __init__(self, motor_name: str, value: int):
