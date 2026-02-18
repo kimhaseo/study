@@ -10,6 +10,7 @@ from config import (
 from math_utils import rpy_deg_to_R, clamp_vec3
 from robot_model import RobotModel
 from shared_state import SharedState
+from scenario import ScenarioPlayer
 from ui import IKUI
 from controller import IKController
 try:
@@ -46,12 +47,15 @@ def main():
     shared.R_goal[:, :] = rpy_deg_to_R(*rpy0)
     shared.R_cmd[:, :] = shared.R_goal.copy()
 
+    # ScenarioPlayer 단일 인스턴스 생성 후 주입
+    scenario_player = ScenarioPlayer(WORKSPACE_LIMIT_M)
+
     # controller thread
-    ctrl = IKController(robot, shared, WORKSPACE_LIMIT_M)
+    ctrl = IKController(robot, shared, WORKSPACE_LIMIT_M, scenario_player)
     ctrl.start()
 
     # UI
-    ui = IKUI(shared, WORKSPACE_LIMIT_M, detector)
+    ui = IKUI(shared, WORKSPACE_LIMIT_M, detector, scenario_player)
     try:
         ui.mainloop()
     finally:

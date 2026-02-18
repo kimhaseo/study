@@ -4,6 +4,8 @@ import numpy as np
 from units import MM_TO_M, mm_to_m_vec
 from math_utils import clamp_vec3, rot_error_log3, rpy_deg_to_R
 
+_ERROR_MODE_DEBOUNCE_S = 0.15
+
 class ScenarioPlayer:
     def __init__(self, workspace_limit_m: np.ndarray):
         self.workspace_limit_m = workspace_limit_m
@@ -21,39 +23,32 @@ class ScenarioPlayer:
         shared.R_goal[:, :] = R_goal
         shared.last_reach_time = 0.0
 
+    def _check_debounce(self, shared, is_near: bool, dwell_s: float) -> bool:
+        """is_near 상태가 dwell_s초 이상 유지되면 True 반환. 타이머 리셋도 담당."""
+        if is_near:
+            if shared.last_reach_time == 0.0:
+                shared.last_reach_time = time.time()
+            return (time.time() - shared.last_reach_time) >= dwell_s
+        else:
+            shared.last_reach_time = 0.0
+            return False
+
     def step(self, shared, p_cur: np.ndarray, R_cur: np.ndarray):
         if not shared.play_enable or len(shared.waypoints) == 0:
             return
 
-        # Decide reach based on EE vs GOAL
         p_goal = shared.p_goal.copy()
         R_goal = shared.R_goal.copy()
 
         pos_err = p_goal - p_cur
         rot_err = rot_error_log3(R_goal, R_cur)
 
-        reached = False
         ptol_m = shared.pos_tol_mm * MM_TO_M
-        pos_near = np.linalg.norm(pos_err) <= ptol_m
-        rot_near = np.linalg.norm(rot_err) <= shared.rot_tol_rad
+        is_near = (np.linalg.norm(pos_err) <= ptol_m and
+                   np.linalg.norm(rot_err) <= shared.rot_tol_rad)
 
-        if shared.play_mode == "hold":
-            if pos_near and rot_near:
-                if shared.last_reach_time == 0.0:
-                    shared.last_reach_time = time.time()
-                if (time.time() - shared.last_reach_time) >= shared.hold_time_s:
-                    reached = True
-            else:
-                shared.last_reach_time = 0.0
-        else:
-            ptol_m = shared.pos_tol_mm * MM_TO_M
-            if np.linalg.norm(pos_err) <= ptol_m and np.linalg.norm(rot_err) <= shared.rot_tol_rad:
-                if shared.last_reach_time == 0.0:
-                    shared.last_reach_time = time.time()
-                if (time.time() - shared.last_reach_time) >= 0.15:
-                    reached = True
-            else:
-                shared.last_reach_time = 0.0
+        dwell_s = shared.hold_time_s if shared.play_mode == "hold" else _ERROR_MODE_DEBOUNCE_S
+        reached = self._check_debounce(shared, is_near, dwell_s)
 
         if reached:
             nxt = shared.play_idx + 1

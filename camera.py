@@ -64,7 +64,7 @@ class D405Detector:
     def _detect_bbox(self, img: np.ndarray, target_class: str):
         """
         target_class 이름과 일치하는 bbox 중 confidence 가장 높은 것 반환.
-        Returns: (x1, y1, x2, y2) or None
+        Returns: ((x1, y1, x2, y2), conf) or (None, None)
         """
         results = self.model(img, verbose=False)
         best_conf = -1.0
@@ -78,7 +78,9 @@ class D405Detector:
                     best_conf = conf
                     best_box  = box.xyxy[0].cpu().numpy().astype(int)
 
-        return best_box  # (x1, y1, x2, y2) or None
+        if best_box is None:
+            return None, None
+        return best_box, best_conf
 
     # ----------------------------------------------------------
     # bbox 영역 포인트클라우드 추출
@@ -156,7 +158,7 @@ class D405Detector:
             return None
 
         img  = np.asanyarray(color_frame.get_data())
-        bbox = self._detect_bbox(img, target_class)
+        bbox, conf = self._detect_bbox(img, target_class)
         if bbox is None:
             return None
 
@@ -170,6 +172,7 @@ class D405Detector:
             "position": position,
             "rpy":      rpy,
             "bbox":     tuple(bbox),
+            "conf":     conf,
         }
 
     # ----------------------------------------------------------
@@ -185,7 +188,7 @@ class D405Detector:
                 continue
 
             img  = np.asanyarray(color_frame.get_data())
-            bbox = self._detect_bbox(img, target_class)
+            bbox, _ = self._detect_bbox(img, target_class)
 
             if bbox is not None:
                 x1, y1, x2, y2 = bbox

@@ -9,11 +9,11 @@ from math_utils import rpy_deg_to_R, R_to_rpy_deg, clamp_vec3
 from scenario import ScenarioPlayer
 
 class IKUI:
-    def __init__(self, shared, workspace_limit_m: np.ndarray, detector=None):
+    def __init__(self, shared, workspace_limit_m: np.ndarray, detector=None, scenario=None):
         self.shared = shared
         self.workspace_limit_m = workspace_limit_m
         self.workspace_limit_mm = workspace_limit_m * M_TO_MM
-        self.scenario = ScenarioPlayer(workspace_limit_m)
+        self.scenario = scenario if scenario is not None else ScenarioPlayer(workspace_limit_m)
         self.detector = detector
 
         self.root = tk.Tk()
@@ -338,11 +338,11 @@ class IKUI:
 
         ttk.Button(frm, text="Quit", command=self.quit).grid(row=18, column=0, columnspan=3, sticky="we", pady=(8, 0))
 
-        self.lbl_cur.grid(row=18, column=0, columnspan=3, sticky="w", pady=(10, 0))
-        self.lbl_goal.grid(row=19, column=0, columnspan=3, sticky="w")
-        self.lbl_cmd.grid(row=20, column=0, columnspan=3, sticky="w")
-        self.lbl_err.grid(row=21, column=0, columnspan=3, sticky="w")
-        self.lbl_play.grid(row=22, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.lbl_cur.grid( row=19, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        self.lbl_goal.grid(row=20, column=0, columnspan=3, sticky="w")
+        self.lbl_cmd.grid( row=21, column=0, columnspan=3, sticky="w")
+        self.lbl_err.grid( row=22, column=0, columnspan=3, sticky="w")
+        self.lbl_play.grid(row=23, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         # RIGHT
         sc = ttk.LabelFrame(main, text="Scenario (mm / deg)", padding=10)
