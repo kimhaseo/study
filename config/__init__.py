@@ -1,11 +1,11 @@
-# config.py
+# config/__init__.py
 import numpy as np
 
 # =============================
-# URDF & Mesh Paths (너 환경 그대로)
+# URDF & Mesh Paths
 # =============================
-URDF_PATH = r"C:\Users\gktj0\PycharmProjects\study\7dof_urdf\7dof_urdf.urdf"
-MESH_ROOT = r"C:\Users\gktj0\PycharmProjects\study\7dof_urdf"
+URDF_PATH = r"/Users/kimhaseo/workspace/study/7dof_urdf/7dof_urdf.urdf"
+MESH_ROOT = r"/Users/kimhaseo/workspace/study/7dof_urdf"
 
 # =============================
 # EE frame name

@@ -1,4 +1,5 @@
 # ui.py
+import csv
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -63,23 +64,34 @@ class IKUI:
     # UI Actions
     # -----------------------------
     def apply_goal_from_ui(self):
-        with self.shared.lock:
+        # Read UI vars outside the lock (tkinter vars are main-thread only)
+        try:
             p_mm = np.array([self.var_x.get(), self.var_y.get(), self.var_z.get()], dtype=float)
-            p_m = clamp_vec3(mm_to_m_vec(p_mm), self.workspace_limit_m)
-            self.shared.p_goal[:] = p_m
-
             rpy = np.array([self.var_roll.get(), self.var_pitch.get(), self.var_yaw.get()], dtype=float)
+            step_mm = float(self.var_step_mm.get())
+            dqmax = float(self.var_dqmax.get())
+            damp = float(self.var_damp.get())
+            ns = float(self.var_ns.get())
+            kb = bool(self.var_kb.get())
+            vmax = float(self.var_vmax_mm_s.get())
+            wmax = float(self.var_wmax_deg_s.get())
+        except tk.TclError:
+            return
+
+        p_m = clamp_vec3(mm_to_m_vec(p_mm), self.workspace_limit_m)
+        R_goal = rpy_deg_to_R(rpy[0], rpy[1], rpy[2])
+
+        with self.shared.lock:
+            self.shared.p_goal[:] = p_m
             self.shared.rpy_goal_deg[:] = rpy
-            self.shared.R_goal[:, :] = rpy_deg_to_R(rpy[0], rpy[1], rpy[2])
-
-            self.shared.step_mm = float(self.var_step_mm.get())
-            self.shared.dq_max = float(self.var_dqmax.get())
-            self.shared.damping_base = float(self.var_damp.get())
-            self.shared.null_gain = float(self.var_ns.get())
-            self.shared.keyboard_enable = bool(self.var_kb.get())
-
-            self.shared.v_cmd_max_mm_s = float(self.var_vmax_mm_s.get())
-            self.shared.w_cmd_max_deg_s = float(self.var_wmax_deg_s.get())
+            self.shared.R_goal[:, :] = R_goal
+            self.shared.step_mm = step_mm
+            self.shared.dq_max = dqmax
+            self.shared.damping_base = damp
+            self.shared.null_gain = ns
+            self.shared.keyboard_enable = kb
+            self.shared.v_cmd_max_mm_s = vmax
+            self.shared.w_cmd_max_deg_s = wmax
 
     def sync_goal_cmd_to_current(self):
         with self.shared.lock:
@@ -193,11 +205,12 @@ class IKUI:
         if not path:
             return
 
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("name,px_mm,py_mm,pz_mm,roll_deg,pitch_deg,yaw_deg\n")
+        with open(path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["name", "px_mm", "py_mm", "pz_mm", "roll_deg", "pitch_deg", "yaw_deg"])
             for wp in wps:
                 p = wp["p_mm"]; rpy = wp["rpy"]
-                f.write(f"{wp['name']},{p[0]},{p[1]},{p[2]},{rpy[0]},{rpy[1]},{rpy[2]}\n")
+                writer.writerow([wp["name"], p[0], p[1], p[2], rpy[0], rpy[1], rpy[2]])
 
     def load_csv(self):
         path = filedialog.askopenfilename(
@@ -209,28 +222,20 @@ class IKUI:
 
         loaded = []
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                lines = f.read().splitlines()
-            if not lines:
-                return
-            header = lines[0].replace(" ", "").lower()
-            start = 1 if header.startswith("name,px") else 0
-
-            for ln in lines[start:]:
-                if not ln.strip():
-                    continue
-                parts = [x.strip() for x in ln.split(",")]
-                if len(parts) < 7:
-                    continue
-                name = parts[0]
-                pmm = np.array([float(parts[1]), float(parts[2]), float(parts[3])], dtype=float)
-                rpy = np.array([float(parts[4]), float(parts[5]), float(parts[6])], dtype=float)
-
-                # clamp
-                p_m = clamp_vec3(mm_to_m_vec(pmm), self.workspace_limit_m)
-                pmm = m_to_mm_vec(p_m)
-                loaded.append({"name": name, "p_mm": pmm, "rpy": rpy})
-
+            with open(path, "r", encoding="utf-8", newline="") as f:
+                reader = csv.reader(f)
+                header = next(reader, None)
+                if header is None:
+                    return
+                for row in reader:
+                    if len(row) < 7:
+                        continue
+                    name = row[0].strip()
+                    pmm = np.array([float(row[1]), float(row[2]), float(row[3])], dtype=float)
+                    rpy = np.array([float(row[4]), float(row[5]), float(row[6])], dtype=float)
+                    p_m = clamp_vec3(mm_to_m_vec(pmm), self.workspace_limit_m)
+                    pmm = m_to_mm_vec(p_m)
+                    loaded.append({"name": name, "p_mm": pmm, "rpy": rpy})
         except Exception as e:
             messagebox.showerror("Load error", str(e))
             return

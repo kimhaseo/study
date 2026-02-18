@@ -6,6 +6,7 @@ import keyboard
 
 from units import MM_TO_M
 from math_utils import clamp_vec3, rot_error_log3, slerp_R
+from ik_solver import solve_ik_step
 from scenario import ScenarioPlayer
 
 class IKController:
@@ -65,12 +66,17 @@ class IKController:
 
             # Keyboard updates GOAL only if not playing
             if kb and (not pe_now):
-                if keyboard.is_pressed("w"): p_goal[0] += local_step_m
-                if keyboard.is_pressed("s"): p_goal[0] -= local_step_m
-                if keyboard.is_pressed("a"): p_goal[1] += local_step_m
-                if keyboard.is_pressed("d"): p_goal[1] -= local_step_m
-                if keyboard.is_pressed("q"): p_goal[2] += local_step_m
-                if keyboard.is_pressed("e"): p_goal[2] -= local_step_m
+                try:
+                    if keyboard.is_pressed("w"): p_goal[0] += local_step_m
+                    if keyboard.is_pressed("s"): p_goal[0] -= local_step_m
+                    if keyboard.is_pressed("a"): p_goal[1] += local_step_m
+                    if keyboard.is_pressed("d"): p_goal[1] -= local_step_m
+                    if keyboard.is_pressed("q"): p_goal[2] += local_step_m
+                    if keyboard.is_pressed("e"): p_goal[2] -= local_step_m
+                except (OSError, ValueError):
+                    # keyboard library requires sudo on macOS; disable if unavailable
+                    with self.shared.lock:
+                        self.shared.keyboard_enable = False
 
                 p_goal = clamp_vec3(p_goal, self.workspace_limit_m)
                 with self.shared.lock:
@@ -102,21 +108,15 @@ class IKController:
                 self.shared.R_cmd[:, :] = R_cmd
 
             # ===== IK DLS =====
-            rot_err = rot_error_log3(R_cmd, R_cur)
             pos_err = p_cmd - p_cur
-            err = np.hstack([pos_err, rot_err])
-
-            damping = damp_base * (1.0 + np.linalg.norm(err))
+            rot_err = rot_error_log3(R_cmd, R_cur)
             J = self.robot.compute_jacobian_joints()
-            JT = J.T
-            JJt = J @ JT
-            A = JJt + damping * np.eye(6)
 
-            dq = JT @ np.linalg.solve(A, err)
-
-            # Null-space home pull
-            N = np.eye(J.shape[1]) - JT @ np.linalg.solve(A, J)
-            dq += N @ (ns_gain * (self.robot.q_home[7:] - self.robot.q[7:]))
+            dq = solve_ik_step(
+                J, pos_err, rot_err, damp_base, dq_max,
+                q_cur=self.robot.q[7:], q_home=self.robot.q_home[7:],
+                null_gain=ns_gain,
+            )
 
             self.robot.apply_dq(dq, dq_max)
             self.robot.display()
