@@ -12,9 +12,15 @@ from robot_model import RobotModel
 from shared_state import SharedState
 from ui import IKUI
 from controller import IKController
+try:
+    from camera import D405Detector
+    _camera_available = True
+except ImportError:
+    _camera_available = False
 
 def main():
     robot = RobotModel(URDF_PATH, MESH_ROOT, EE_NAME)
+    detector = D405Detector("yolov8n.pt") if _camera_available else None
 
     shared = SharedState()
     shared.dt = DT
@@ -45,11 +51,13 @@ def main():
     ctrl.start()
 
     # UI
-    ui = IKUI(shared, WORKSPACE_LIMIT_M)
+    ui = IKUI(shared, WORKSPACE_LIMIT_M, detector)
     try:
         ui.mainloop()
     finally:
         ctrl.stop()
+        if detector is not None:
+            detector.close()
 
 if __name__ == "__main__":
     main()

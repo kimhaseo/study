@@ -9,11 +9,12 @@ from math_utils import rpy_deg_to_R, R_to_rpy_deg, clamp_vec3
 from scenario import ScenarioPlayer
 
 class IKUI:
-    def __init__(self, shared, workspace_limit_m: np.ndarray):
+    def __init__(self, shared, workspace_limit_m: np.ndarray, detector=None):
         self.shared = shared
         self.workspace_limit_m = workspace_limit_m
         self.workspace_limit_mm = workspace_limit_m * M_TO_MM
         self.scenario = ScenarioPlayer(workspace_limit_m)
+        self.detector = detector
 
         self.root = tk.Tk()
         self.root.title("Pinocchio IK UI (mm + deg) + Scenario (modular)")
@@ -45,6 +46,8 @@ class IKUI:
         self.var_rottol = tk.DoubleVar(value=0.03)
         self.var_playmode = tk.StringVar(value="hold")
         self.var_record_source = tk.StringVar(value="target")
+        self.var_detect_class = tk.StringVar(value="cup")
+        self.var_detect_status = tk.StringVar(value="대기 중")
 
         self.lbl_cur = ttk.Label(self.root, text="EE cur [mm]: ...")
         self.lbl_goal = ttk.Label(self.root, text="GOAL [mm]: ...")
@@ -104,6 +107,39 @@ class IKUI:
     def home_nullspace(self):
         # EE는 유지(현재), null-space로 관절 홈 당김
         self.sync_goal_cmd_to_current()
+
+    def detect_and_set_goal(self):
+        if self.detector is None:
+            return
+        target = self.var_detect_class.get().strip()
+        if not target:
+            return
+
+        self.var_detect_status.set(f"'{target}' 감지 중...")
+        self.root.update()
+
+        pose = self.detector.get_pose(target)
+
+        if pose is None:
+            self.var_detect_status.set(f"'{target}' 미감지")
+            return
+
+        p_m = pose["position"]
+        rpy  = pose["rpy"]           # radians
+        R_goal = rpy_deg_to_R(*np.degrees(rpy))
+        p_m  = clamp_vec3(p_m, self.workspace_limit_m)
+
+        with self.shared.lock:
+            self.shared.p_goal[:]     = p_m
+            self.shared.R_goal[:, :]  = R_goal
+            self.shared.rpy_goal_deg[:] = np.degrees(rpy)
+
+        self._sync_entries_from_goal()
+        x, y, z = p_m * 1000
+        r, p, y_ = np.degrees(rpy)
+        self.var_detect_status.set(
+            f"감지 완료: ({x:.1f}, {y:.1f}, {z:.1f}) mm | rpy({r:.1f}, {p:.1f}, {y_:.1f}) deg"
+        )
 
     def quit(self):
         self.root.quit()
@@ -289,7 +325,18 @@ class IKUI:
         ttk.Button(btns, text="Sync goal/cmd = current EE", command=self.sync_goal_cmd_to_current).grid(row=0, column=1, sticky="we", padx=(0, 6))
         ttk.Button(btns, text="Home (null-space)", command=self.home_nullspace).grid(row=0, column=2, sticky="we")
 
-        ttk.Button(frm, text="Quit", command=self.quit).grid(row=17, column=0, columnspan=3, sticky="we", pady=(8, 0))
+        # Camera detect
+        if self.detector is not None:
+            det_frm = ttk.LabelFrame(frm, text="Camera Detect", padding=6)
+            det_frm.grid(row=17, column=0, columnspan=3, sticky="we", pady=(10, 0))
+            det_frm.columnconfigure(1, weight=1)
+
+            ttk.Label(det_frm, text="Class").grid(row=0, column=0, sticky="w")
+            ttk.Entry(det_frm, textvariable=self.var_detect_class, width=14).grid(row=0, column=1, sticky="we", padx=(4, 4))
+            ttk.Button(det_frm, text="Detect & Set Goal", command=self.detect_and_set_goal).grid(row=0, column=2, sticky="we")
+            ttk.Label(det_frm, textvariable=self.var_detect_status).grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+        ttk.Button(frm, text="Quit", command=self.quit).grid(row=18, column=0, columnspan=3, sticky="we", pady=(8, 0))
 
         self.lbl_cur.grid(row=18, column=0, columnspan=3, sticky="w", pady=(10, 0))
         self.lbl_goal.grid(row=19, column=0, columnspan=3, sticky="w")

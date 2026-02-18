@@ -3,6 +3,7 @@ import numpy as np
 import pinocchio as pin
 from pinocchio.visualize import MeshcatVisualizer
 from scipy.spatial.transform import Rotation as R
+from ik_solver import solve_ik_step
 
 
 class RobotModel:
@@ -68,7 +69,6 @@ class RobotModel:
         return J6[:, 6:]
 
     def apply_dq(self, dq: np.ndarray, dq_max: float):
-        dq = np.clip(dq, -dq_max, dq_max)
         self.q[7:] += dq
         self.q[7:] = np.clip(
             self.q[7:], self.model.lowerPositionLimit[7:], self.model.upperPositionLimit[7:]
@@ -124,12 +124,7 @@ class RobotModel:
             )
             J = J6[:, 6:]
 
-            err = np.hstack([pos_err, rot_err])
-            lam = damping * (1.0 + np.linalg.norm(err))
-            A = J @ J.T + lam * np.eye(6)
-            dq = J.T @ np.linalg.solve(A, err)
-            dq = np.clip(dq, -dq_max, dq_max)
-
+            dq = solve_ik_step(J, pos_err, rot_err, damping, dq_max)
             q_trial[7:] += dq
             q_trial[7:] = np.clip(
                 q_trial[7:],

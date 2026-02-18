@@ -49,19 +49,14 @@ class IKController:
                 vmax_m_s = float(self.shared.v_cmd_max_mm_s) * MM_TO_M
                 wmax_deg_s = float(self.shared.w_cmd_max_deg_s)
 
-                # snapshot targets
+                # Scenario updates GOAL
+                self.scenario.step(self.shared, p_cur, R_cur)
+
+                # snapshot targets (after scenario may have updated goal)
                 p_goal = self.shared.p_goal.copy()
                 R_goal = self.shared.R_goal.copy()
                 p_cmd = self.shared.p_cmd.copy()
                 R_cmd = self.shared.R_cmd.copy()
-
-                pe_now = bool(self.shared.play_enable)
-
-            # Scenario updates GOAL (under lock)
-            with self.shared.lock:
-                self.scenario.step(self.shared, p_cur, R_cur)
-                p_goal = self.shared.p_goal.copy()
-                R_goal = self.shared.R_goal.copy()
                 pe_now = bool(self.shared.play_enable)
 
             # Keyboard updates GOAL only if not playing

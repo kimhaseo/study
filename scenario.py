@@ -33,11 +33,18 @@ class ScenarioPlayer:
         rot_err = rot_error_log3(R_goal, R_cur)
 
         reached = False
+        ptol_m = shared.pos_tol_mm * MM_TO_M
+        pos_near = np.linalg.norm(pos_err) <= ptol_m
+        rot_near = np.linalg.norm(rot_err) <= shared.rot_tol_rad
+
         if shared.play_mode == "hold":
-            if shared.last_reach_time == 0.0:
-                shared.last_reach_time = time.time()
-            if (time.time() - shared.last_reach_time) >= shared.hold_time_s:
-                reached = True
+            if pos_near and rot_near:
+                if shared.last_reach_time == 0.0:
+                    shared.last_reach_time = time.time()
+                if (time.time() - shared.last_reach_time) >= shared.hold_time_s:
+                    reached = True
+            else:
+                shared.last_reach_time = 0.0
         else:
             ptol_m = shared.pos_tol_mm * MM_TO_M
             if np.linalg.norm(pos_err) <= ptol_m and np.linalg.norm(rot_err) <= shared.rot_tol_rad:
